@@ -1,0 +1,231 @@
+import {
+  ChildProcess,
+  ExecException,
+  ProcessEnvOptions,
+  spawn,
+  SpawnOptions,
+} from "child_process";
+import { randomUUID } from "crypto";
+import EventEmitter, { once } from "events";
+import { text } from "stream/consumers";
+import { commands, ExtensionContext, Uri, window } from "vscode";
+
+function normalizeExecInput(
+  prog: string | undefined,
+  args: string | string[] | undefined,
+):
+  | { succeed: false; error: ExecException }
+  | { succeed: true; prog: string; args: string[] } {
+  if (!prog) {
+    return {
+      succeed: false,
+      error: {
+        name: "invalid argument 'process'",
+        message: `Unexpected empty process: ${prog}`,
+      },
+    };
+  }
+  const normalizedArgs =
+    typeof args === "string"
+      ? [args]
+      : Array.isArray(args) && args.every((e) => typeof e === "string")
+        ? args
+        : [];
+  return { succeed: true, prog, args: normalizedArgs };
+}
+
+async function runProcess(
+  prog?: string,
+  args?: string | string[],
+  options?: ProcessEnvOptions | null,
+): Promise<{ error: ExecException | null; stdout: string; stderr: string }> {
+  const normalized = normalizeExecInput(prog, args);
+  switch (normalized.succeed) {
+    case false: {
+      return { error: normalized.error, stdout: "", stderr: "" };
+    }
+    case true:
+      const process = spawn(normalized.prog, normalized.args, {
+        ...(options || {}),
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const errorPromise = new Promise<ExecException | null>((resolve) => {
+        process.on("exit", (code, signal) => {
+          if (code !== null) {
+            if (code === 0) {
+              resolve(null);
+            } else {
+              resolve({
+                name: "runProcess",
+                message: "non-zero return code",
+                code,
+              });
+            }
+          } else if (signal !== null) {
+            resolve({
+              name: "runProcess",
+              message: "killed by signal",
+              signal,
+            });
+          } else {
+            resolve({
+              name: "runProcess",
+              message: `unexpected exit status with neither code nor signal`,
+            });
+          }
+        });
+      });
+      const processErrorPromise = new Promise<Error>((resolve) => {
+        process.on("error", (err) => resolve(err));
+      });
+
+      let stdout: string, stderr: string, error: ExecException | null;
+      [stdout, stderr, error] = await Promise.all([
+        text(process.stdout),
+        text(process.stdout),
+        Promise.race([errorPromise, processErrorPromise]),
+      ]);
+
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        error.cmd = JSON.stringify({ prog, args });
+      }
+      return { error, stdout, stderr };
+  }
+}
+
+type ProcessLineStreamerSpawnResult =
+  | { succeed: false; error: ExecException }
+  | { succeed: true; id: string };
+type ProcessLineStreamerStatus = {
+  stdout: string[];
+  stderr: string[];
+  exit: number | string | undefined;
+};
+type Instance = ProcessLineStreamerStatus & { proc: ChildProcess };
+
+class ProcessLineStreamer {
+  private instances: {
+    [id: string]: Instance;
+  } = {};
+
+  private event: EventEmitter = new EventEmitter();
+
+  public async readLines(id: string): Promise<ProcessLineStreamerStatus | undefined> {
+    const instance = this.instances[id];
+    if (!instance) {
+      return undefined;
+    } else {
+      const { stdout, stderr, exit } = instance;
+      if (exit !== undefined) {
+        delete this.instances[id];
+        return { stdout, stderr, exit };
+      } else {
+        if (stdout.length === 0 && stderr.length === 0) {
+          // no updates, waiting
+          await once(this.event, id);
+          return await this.readLines(id);
+        } else {
+          this.instances[id].stdout = [];
+          this.instances[id].stderr = [];
+          return { stdout, stderr, exit };
+        }
+      }
+    }
+  }
+
+  public async kill(id: string, signal?: NodeJS.Signals | number) {
+    const instance = this.instances[id];
+    if (instance !== undefined) {
+      delete this.instances[id];
+      this.event.emit(id);
+      return instance.proc.kill(signal);
+    }
+    return undefined;
+  }
+
+  public async spawn(
+    prog?: string,
+    args?: string | string[],
+    options?: SpawnOptions | null,
+  ): Promise<ProcessLineStreamerSpawnResult> {
+    const normalized = normalizeExecInput(prog, args);
+    switch (normalized.succeed) {
+      case false: {
+        return normalized;
+      }
+      case true:
+        const proc = spawn(normalized.prog, normalized.args, {
+          ...(options || {}),
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const id = randomUUID();
+        const instance: Instance = { stdout: [], stderr: [], exit: undefined, proc };
+        this.instances[id] = instance;
+
+        let stdoutBuffer = "",
+          stderrBuffer = "";
+        proc.stdout.on("data", (data) => {
+          stdoutBuffer += data.toString();
+          const lines = stdoutBuffer.split("\n");
+          if (lines.length > 0) {
+            stdoutBuffer = lines.pop()!;
+            instance.stdout.push(...lines);
+            this.event.emit(id);
+            // TODO limit buffer size with `pause`, and `resume` when consumed
+          }
+        });
+        proc.stderr.on("data", (data) => {
+          stderrBuffer += data.toString();
+          const lines = stderrBuffer.split("\n");
+          if (lines.length > 0) {
+            stderrBuffer = lines.pop()!;
+            instance.stderr.push(...lines);
+            this.event.emit(id);
+          }
+        });
+
+        proc.on("close", (code, signal) => {
+          instance.stdout.push(stdoutBuffer);
+          instance.stderr.push(stderrBuffer);
+          instance.exit =
+            code !== null
+              ? code
+              : signal !== null
+                ? signal
+                : "Unexpected: no code or signal on exit";
+          this.event.emit(id);
+        });
+
+        return { succeed: true, id };
+    }
+  }
+}
+
+export async function activate(context: ExtensionContext) {
+  const processLineStreamer = new ProcessLineStreamer();
+  context.subscriptions.push(
+    commands.registerCommand("remote-commons.ping", () => "pong"),
+    commands.registerCommand("remote-commons.openFile", async (file: string, options) => {
+      await window.showTextDocument(Uri.file(file), options);
+    }),
+    commands.registerCommand("remote-commons.process.run", runProcess),
+    commands.registerCommand(
+      "remote-commons.process.lineStreamer.spawn",
+      async (...args) =>
+        await processLineStreamer.spawn.apply(processLineStreamer, args as any),
+    ),
+    commands.registerCommand(
+      "remote-commons.process.lineStreamer.read",
+      async (id: string) => await processLineStreamer.readLines(id),
+    ),
+    commands.registerCommand(
+      "remote-commons.process.lineStreamer.kill",
+      async (id: string) => await processLineStreamer.kill(id),
+    ),
+  );
+}
+
+export function deactivate() {}

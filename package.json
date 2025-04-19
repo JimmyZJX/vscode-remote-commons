@@ -1,0 +1,139 @@
+{
+  "name": "remote-commons",
+  "publisher": "JimmyZJX",
+  "displayName": "Remote Commons",
+  "description": "Common workspace APIs provided for UI extensions",
+  "version": "0.2.0",
+  "homepage": "https://github.com/JimmyZJX/vscode-remote-commons",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JimmyZJX/vscode-remote-commons"
+  },
+  "bugs": {
+    "url": "https://github.com/JimmyZJX/vscode-remote-commons/issues"
+  },
+  "engines": {
+    "vscode": "^1.89.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "utilities",
+    "programming",
+    "api"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "remote-commons.ping",
+        "title": "Ping",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.process.run",
+        "title": "Run Process",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.process.lineStreamer.spawn",
+        "title": "Spawn a ProcessLineStreamer",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.process.lineStreamer.read",
+        "title": "Read lines from a ProcessLineStreamer",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.process.lineStreamer.kill",
+        "title": "Kill a ProcessLineStreamer",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.openFile",
+        "title": "Open File",
+        "category": "Remote Commons"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "remote-commons.ping",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "prettier": {
+    "printWidth": 90
+  },
+  "eslintConfig": {
+    "root": true,
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended"
+    ],
+    "rules": {
+      "semi": [
+        2,
+        "always"
+      ],
+      "object-shorthand": [
+        "error",
+        "always"
+      ],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          "args": "all",
+          "argsIgnorePattern": "^_",
+          "caughtErrors": "all",
+          "caughtErrorsIgnorePattern": "^_",
+          "destructuredArrayIgnorePattern": "^_",
+          "varsIgnorePattern": "^_",
+          "ignoreRestSiblings": true
+        }
+      ],
+      "@typescript-eslint/no-explicit-any": 0,
+      "@typescript-eslint/explicit-module-boundary-types": 0,
+      "@typescript-eslint/no-non-null-assertion": 0,
+      "@typescript-eslint/no-namespace": 0,
+      "eqeqeq": [
+        "error",
+        "always"
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc --watch",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "prettier": "prettier",
+    "prettier-check": "prettier \"src/**/*.ts\" --check --log-level warn",
+    "vsce": "vsce package --allow-star-activation --out dist/vscode-remote-commons.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "20.x",
+    "@types/vscode": "^1.89.0 <1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.3.0",
+    "@typescript-eslint/parser": "^8.3.0",
+    "@vscode/vsce": "^2.23.0",
+    "eslint": "^8.26.0",
+    "prettier": "3.3.3",
+    "typescript": "^5.3.2 <5.6.0"
+  }
+}
