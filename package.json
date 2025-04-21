@@ -124,7 +124,7 @@
     "lint": "eslint src",
     "prettier": "prettier",
     "prettier-check": "prettier \"src/**/*.ts\" --check --log-level warn",
-    "vsce": "mkdir dist && vsce package --allow-star-activation --out dist/vscode-remote-commons.vsix"
+    "vsce": "vsce package --allow-star-activation --out dist/vscode-remote-commons.vsix"
   },
   "devDependencies": {
     "@types/node": "20.x",

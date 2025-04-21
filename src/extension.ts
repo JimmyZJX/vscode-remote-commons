@@ -83,7 +83,7 @@ async function runProcess(
       let stdout: string, stderr: string, error: ExecException | null;
       [stdout, stderr, error] = await Promise.all([
         text(process.stdout),
-        text(process.stdout),
+        text(process.stderr),
         Promise.race([errorPromise, processErrorPromise]),
       ]);
 
@@ -188,8 +188,8 @@ class ProcessLineStreamer {
         });
 
         proc.on("close", (code, signal) => {
-          instance.stdout.push(stdoutBuffer);
-          instance.stderr.push(stderrBuffer);
+          if (stdoutBuffer) instance.stdout.push(stdoutBuffer);
+          if (stderrBuffer) instance.stderr.push(stderrBuffer);
           instance.exit =
             code !== null
               ? code
