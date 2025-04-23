@@ -7,8 +7,11 @@ import {
 } from "child_process";
 import { randomUUID } from "crypto";
 import EventEmitter, { once } from "events";
+import { mkdir, readdir, stat, writeFile } from "fs/promises";
+import { platform } from "os";
+import { dirname } from "path";
 import { text } from "stream/consumers";
-import { commands, ExtensionContext, Uri, window } from "vscode";
+import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
 
 function normalizeExecInput(
   prog: string | undefined,
@@ -204,10 +207,61 @@ class ProcessLineStreamer {
   }
 }
 
+async function readDirFilesAndDirs(dir: string) {
+  const entries = await readdir(dir, { withFileTypes: true, recursive: false });
+  const files: string[] = [],
+    dirs: string[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory() || entry.isSymbolicLink()) {
+      dirs.push(entry.name);
+    } else {
+      files.push(entry.name);
+    }
+  }
+  return { files, dirs };
+}
+
+async function createFile(path: string) {
+  await mkdir(dirname(path), { recursive: true });
+  try {
+    await stat(path);
+    return;
+  } catch (exn) {
+    try {
+      await writeFile(path, "");
+    } catch {}
+  }
+}
+
+async function fileExists(path: string) {
+  try {
+    await stat(path);
+    return true;
+  } catch (exn) {
+    return false;
+  }
+}
+
 export async function activate(context: ExtensionContext) {
   const processLineStreamer = new ProcessLineStreamer();
   context.subscriptions.push(
-    commands.registerCommand("remote-commons.ping", () => "pong"),
+    commands.registerCommand("remote-commons.platform", () => platform()),
+    commands.registerCommand("remote-commons.extensions.getAll", () =>
+      extensions.all.map((extension) => ({
+        id: extension.id,
+        version: extension.packageJSON.version,
+      })),
+    ),
+    commands.registerCommand(
+      "remote-commons.fs.readDirFilesAndDirs",
+      async (dir: string) => readDirFilesAndDirs(dir),
+    ),
+    commands.registerCommand("remote-commons.fs.createFile", async (path: string) =>
+      createFile(path),
+    ),
+    commands.registerCommand("remote-commons.fs.fileExists", async (path: string) =>
+      fileExists(path),
+    ),
     commands.registerCommand("remote-commons.openFile", async (file: string, options) => {
       await window.showTextDocument(Uri.file(file), options);
     }),

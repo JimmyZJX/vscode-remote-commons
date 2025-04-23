@@ -3,7 +3,7 @@
   "publisher": "JimmyZJX",
   "displayName": "Remote Commons",
   "description": "Common workspace APIs provided for UI extensions",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "homepage": "https://github.com/JimmyZJX/vscode-remote-commons",
   "repository": {
     "type": "git",
@@ -33,8 +33,28 @@
   "contributes": {
     "commands": [
       {
-        "command": "remote-commons.ping",
-        "title": "Ping",
+        "command": "remote-commons.version",
+        "title": "Get Extension Version (major.minor.patch)",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.platform",
+        "title": "Get Platform (`os.platform()`)",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.extensions.getAll",
+        "title": "Get Installed (workspace) Extensions (id and version)",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.fs.readDirFilesAndDirs",
+        "title": "Read files and directories in a directory",
+        "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.fs.createFile",
+        "title": "Create file (and parent directories) if not exists",
         "category": "Remote Commons"
       },
       {
