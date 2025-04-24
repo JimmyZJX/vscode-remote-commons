@@ -208,17 +208,21 @@ class ProcessLineStreamer {
 }
 
 async function readDirFilesAndDirs(dir: string) {
-  const entries = await readdir(dir, { withFileTypes: true, recursive: false });
-  const files: string[] = [],
-    dirs: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory() || entry.isSymbolicLink()) {
-      dirs.push(entry.name);
-    } else {
-      files.push(entry.name);
+  try {
+    const entries = await readdir(dir, { withFileTypes: true, recursive: false });
+    const files: string[] = [],
+      dirs: string[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        dirs.push(entry.name);
+      } else {
+        files.push(entry.name);
+      }
     }
+    return { files, dirs };
+  } catch (e) {
+    return { files: [], dirs: [], error: JSON.stringify(e) };
   }
-  return { files, dirs };
 }
 
 async function createFile(path: string) {
