@@ -33,11 +33,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "remote-commons.version",
-        "title": "Get Extension Version (major.minor.patch)",
-        "category": "Remote Commons"
-      },
-      {
         "command": "remote-commons.platform",
         "title": "Get Platform (`os.platform()`)",
         "category": "Remote Commons"
@@ -86,7 +81,39 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "remote-commons.ping",
+          "command": "remote-commons.platform",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.extensions.getAll",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.fs.readDirFilesAndDirs",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.fs.createFile",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.process.run",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.process.lineStreamer.spawn",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.process.lineStreamer.read",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.process.lineStreamer.kill",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.openFile",
           "when": "false"
         }
       ]
