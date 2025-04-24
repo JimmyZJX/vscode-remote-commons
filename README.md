@@ -12,7 +12,7 @@ breaking changes are made, and minor versions when new APIs are introduced.
 ## APIs
 
 We plan to provide sample typescript code to interact with this extension, but
-for now you can refer to the Leaderkey implementation (https://github.com/JimmyZJX/leaderkey/blob/feature-ripgrep/src/common/remote.ts).
+for now you can refer to the Leaderkey implementation (https://github.com/JimmyZJX/leaderkey/blob/main/src/common/remote.ts).
 
 Currently, we support the following APIs
 
