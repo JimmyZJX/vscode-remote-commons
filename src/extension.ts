@@ -133,6 +133,7 @@ class ProcessLineStreamer {
         } else {
           this.instances[id].stdout = [];
           this.instances[id].stderr = [];
+          this.event.emit(id); // potentially resume consuming output data
           return { stdout, stderr, exit };
         }
       }
@@ -148,6 +149,8 @@ class ProcessLineStreamer {
     }
     return undefined;
   }
+
+  readonly OUTPUT_BUFFER_NLINES = 10_000;
 
   public async spawn(
     prog?: string,
@@ -170,23 +173,40 @@ class ProcessLineStreamer {
 
         let stdoutBuffer = "",
           stderrBuffer = "";
-        proc.stdout.on("data", (data) => {
+        proc.stdout.on("data", async (data) => {
           stdoutBuffer += data.toString();
           const lines = stdoutBuffer.split("\n");
           if (lines.length > 0) {
             stdoutBuffer = lines.pop()!;
             instance.stdout.push(...lines);
             this.event.emit(id);
-            // TODO limit buffer size with `pause`, and `resume` when consumed
+
+            // pause when buffer lines exceeded
+            let paused = false;
+            while (instance.stdout.length > this.OUTPUT_BUFFER_NLINES) {
+              paused = true;
+              proc.stdout.pause();
+              await once(this.event, id);
+            }
+            if (paused) proc.stdout.resume();
           }
         });
-        proc.stderr.on("data", (data) => {
+        proc.stderr.on("data", async (data) => {
           stderrBuffer += data.toString();
           const lines = stderrBuffer.split("\n");
           if (lines.length > 0) {
             stderrBuffer = lines.pop()!;
             instance.stderr.push(...lines);
             this.event.emit(id);
+
+            // pause when buffer lines exceeded
+            let paused = false;
+            while (instance.stderr.length > this.OUTPUT_BUFFER_NLINES) {
+              paused = true;
+              proc.stderr.pause();
+              await once(this.event, id);
+            }
+            if (paused) proc.stderr.resume();
           }
         });
 
