@@ -3,7 +3,7 @@
   "publisher": "JimmyZJX",
   "displayName": "Remote Commons",
   "description": "Common workspace APIs provided for UI extensions",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "homepage": "https://github.com/JimmyZJX/vscode-remote-commons",
   "repository": {
     "type": "git",
@@ -76,6 +76,11 @@
         "command": "remote-commons.openFile",
         "title": "Open File",
         "category": "Remote Commons"
+      },
+      {
+        "command": "remote-commons.fetch.fetchText",
+        "title": "HTTP Fetch Text Response",
+        "category": "Remote Commons"
       }
     ],
     "menus": {
@@ -114,6 +119,10 @@
         },
         {
           "command": "remote-commons.openFile",
+          "when": "false"
+        },
+        {
+          "command": "remote-commons.fetch.fetchText",
           "when": "false"
         }
       ]
@@ -175,6 +184,7 @@
   },
   "devDependencies": {
     "@types/node": "20.x",
+    "@types/node-fetch": "^2.6.12",
     "@types/vscode": "^1.89.0 <1.90.0",
     "@typescript-eslint/eslint-plugin": "^8.3.0",
     "@typescript-eslint/parser": "^8.3.0",
@@ -182,5 +192,9 @@
     "eslint": "^8.26.0",
     "prettier": "3.3.3",
     "typescript": "^5.3.2 <5.6.0"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0",
+    "node-pty": "^1.0.0"
   }
 }

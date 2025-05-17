@@ -1,10 +1,4 @@
-import {
-  ChildProcess,
-  ExecException,
-  ProcessEnvOptions,
-  spawn,
-  SpawnOptions,
-} from "child_process";
+import { ChildProcess, ExecException, spawn, SpawnOptions } from "child_process";
 import { randomUUID } from "crypto";
 import EventEmitter, { once } from "events";
 import { mkdir, readdir, stat, writeFile } from "fs/promises";
@@ -12,6 +6,8 @@ import { platform } from "os";
 import { dirname } from "path";
 import { text } from "stream/consumers";
 import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
+import fetch, { RequestInfo, RequestInit } from "node-fetch";
+import pty from "node-pty";
 
 function normalizeExecInput(
   prog: string | undefined,
@@ -37,24 +33,35 @@ function normalizeExecInput(
   return { succeed: true, prog, args: normalizedArgs };
 }
 
+type RunProcessOptions = SpawnOptions & { pty?: boolean };
+
 async function runProcess(
   prog?: string,
   args?: string | string[],
-  options?: ProcessEnvOptions | null,
-): Promise<{ error: ExecException | null; stdout: string; stderr: string }> {
+  options?: RunProcessOptions | null,
+): Promise<{
+  error: ExecException | null;
+  stdout: string | undefined;
+  stderr: string | undefined;
+}> {
   const normalized = normalizeExecInput(prog, args);
   switch (normalized.succeed) {
     case false: {
       return { error: normalized.error, stdout: "", stderr: "" };
     }
     case true:
-      const process = spawn(normalized.prog, normalized.args, {
-        ...(options || {}),
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const process = options?.pty
+        ? pty.spawn(normalized.prog, normalized.args, {
+            cwd: options?.cwd?.toString(),
+            env: options?.env,
+          })
+        : spawn(normalized.prog, normalized.args, {
+            stdio: ["ignore", "pipe", "pipe"],
+            ...(options || {}),
+          });
 
       const errorPromise = new Promise<ExecException | null>((resolve) => {
-        process.on("exit", (code, signal) => {
+        const onExit = (code: number, signal: any) => {
           if (code !== null) {
             if (code === 0) {
               resolve(null);
@@ -65,7 +72,7 @@ async function runProcess(
                 code,
               });
             }
-          } else if (signal !== null) {
+          } else if (signal) {
             resolve({
               name: "runProcess",
               message: "killed by signal",
@@ -77,18 +84,32 @@ async function runProcess(
               message: `unexpected exit status with neither code nor signal`,
             });
           }
-        });
-      });
-      const processErrorPromise = new Promise<Error>((resolve) => {
-        process.on("error", (err) => resolve(err));
+        };
+        if ("on" in process) {
+          process.on("exit", onExit);
+        } else {
+          process.onExit(({ exitCode, signal }) => onExit(exitCode, signal));
+        }
       });
 
-      let stdout: string, stderr: string, error: ExecException | null;
-      [stdout, stderr, error] = await Promise.all([
-        text(process.stdout),
-        text(process.stderr),
-        Promise.race([errorPromise, processErrorPromise]),
-      ]);
+      let stdout: string | undefined,
+        stderr: string | undefined,
+        error: ExecException | null;
+      if (process instanceof ChildProcess) {
+        const processErrorPromise = new Promise<Error>((resolve) => {
+          process.on("error", (err: Error) => resolve(err));
+        });
+        [stdout, stderr, error] = await Promise.all([
+          process.stdout ? text(process.stdout) : undefined,
+          process.stderr ? text(process.stderr) : undefined,
+          Promise.race([errorPromise, processErrorPromise]),
+        ]);
+      } else {
+        process.onData((_) => {}); // ignore data
+        error = await errorPromise;
+        stdout = undefined;
+        stderr = undefined;
+      }
 
       if (error) {
         error.stdout = stdout;
@@ -302,6 +323,19 @@ export async function activate(context: ExtensionContext) {
     commands.registerCommand(
       "remote-commons.process.lineStreamer.kill",
       async (id: string) => await processLineStreamer.kill(id),
+    ),
+    commands.registerCommand(
+      "remote-commons.fetch.fetchText",
+      async (url: RequestInfo, init: RequestInit | undefined) => {
+        const resp = await fetch(url, init);
+        return {
+          ok: resp.ok,
+          status: resp.status,
+          statusText: resp.statusText,
+          headers: [...resp.headers],
+          bodyText: await resp.text(),
+        };
+      },
     ),
   );
 }
