@@ -7,7 +7,6 @@ import { dirname } from "path";
 import { text } from "stream/consumers";
 import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
 import fetch, { RequestInfo, RequestInit } from "node-fetch";
-import pty from "node-pty";
 
 function normalizeExecInput(
   prog: string | undefined,
@@ -35,6 +34,12 @@ function normalizeExecInput(
 
 type RunProcessOptions = SpawnOptions & { pty?: boolean };
 
+function quote(s: string) {
+  if (s === "") return `''`;
+  if (!/[^%+,-.\/:=@_0-9A-Za-z]/.test(s)) return s;
+  return `'` + s.replace(/'/g, `'"'`) + `'`;
+}
+
 async function runProcess(
   prog?: string,
   args?: string | string[],
@@ -49,16 +54,30 @@ async function runProcess(
     case false: {
       return { error: normalized.error, stdout: "", stderr: "" };
     }
-    case true:
-      const process = options?.pty
-        ? pty.spawn(normalized.prog, normalized.args, {
-            cwd: options?.cwd?.toString(),
-            env: options?.env,
-          })
-        : spawn(normalized.prog, normalized.args, {
-            stdio: ["ignore", "pipe", "pipe"],
-            ...(options || {}),
-          });
+    case true: {
+      let { prog, args } = normalized;
+      if (options?.pty) {
+        if (platform() === "linux" || platform() === "darwin") {
+          // `unbuffer` is another option
+          // args = ["-p", prog, ...args];
+          // prog = "/usr/bin/unbuffer";
+          args = [
+            "--quiet",
+            "--return",
+            "--command",
+            [prog, ...args].map(quote).join(" "),
+          ];
+          prog = "script";
+        } else if (platform() === "win32") {
+          args = ["/min", "cmd", "/c", prog, ...args];
+          prog = "start";
+          options.shell = true;
+        }
+      }
+      const process = spawn(prog, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        ...(options || {}),
+      });
 
       const errorPromise = new Promise<ExecException | null>((resolve) => {
         const onExit = (code: number, signal: any) => {
@@ -85,31 +104,20 @@ async function runProcess(
             });
           }
         };
-        if ("on" in process) {
-          process.on("exit", onExit);
-        } else {
-          process.onExit(({ exitCode, signal }) => onExit(exitCode, signal));
-        }
+        process.on("exit", onExit);
       });
 
       let stdout: string | undefined,
         stderr: string | undefined,
         error: ExecException | null;
-      if (process instanceof ChildProcess) {
-        const processErrorPromise = new Promise<Error>((resolve) => {
-          process.on("error", (err: Error) => resolve(err));
-        });
-        [stdout, stderr, error] = await Promise.all([
-          process.stdout ? text(process.stdout) : undefined,
-          process.stderr ? text(process.stderr) : undefined,
-          Promise.race([errorPromise, processErrorPromise]),
-        ]);
-      } else {
-        process.onData((_) => {}); // ignore data
-        error = await errorPromise;
-        stdout = undefined;
-        stderr = undefined;
-      }
+      const processErrorPromise = new Promise<Error>((resolve) => {
+        process.on("error", (err: Error) => resolve(err));
+      });
+      [stdout, stderr, error] = await Promise.all([
+        process.stdout ? text(process.stdout) : undefined,
+        process.stderr ? text(process.stderr) : undefined,
+        Promise.race([errorPromise, processErrorPromise]),
+      ]);
 
       if (error) {
         error.stdout = stdout;
@@ -117,6 +125,7 @@ async function runProcess(
         error.cmd = JSON.stringify({ prog, args });
       }
       return { error, stdout, stderr };
+    }
   }
 }
 
