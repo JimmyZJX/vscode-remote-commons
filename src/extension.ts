@@ -2,11 +2,11 @@ import { ChildProcess, ExecException, spawn, SpawnOptions } from "child_process"
 import { randomUUID } from "crypto";
 import EventEmitter, { once } from "events";
 import { mkdir, readdir, stat, writeFile } from "fs/promises";
+import fetch, { RequestInfo, RequestInit } from "node-fetch";
 import { platform } from "os";
 import { dirname } from "path";
 import { text } from "stream/consumers";
 import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
-import fetch, { RequestInfo, RequestInit } from "node-fetch";
 
 function normalizeExecInput(
   prog: string | undefined,
@@ -66,6 +66,7 @@ async function runProcess(
             "--return",
             "--command",
             [prog, ...args].map(quote).join(" "),
+            "/dev/null",
           ];
           prog = "script";
         } else if (platform() === "win32") {
