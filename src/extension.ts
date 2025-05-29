@@ -4,7 +4,7 @@ import EventEmitter, { once } from "events";
 import { mkdir, readdir, stat, writeFile } from "fs/promises";
 import fetch, { RequestInfo, RequestInit } from "node-fetch";
 import { platform } from "os";
-import { dirname } from "path";
+import { dirname, join } from "path";
 import { text } from "stream/consumers";
 import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
 
@@ -263,13 +263,27 @@ async function readDirFilesAndDirs(dir: string) {
     const entries = await readdir(dir, { withFileTypes: true, recursive: false });
     const files: string[] = [],
       dirs: string[] = [];
-    for (const entry of entries) {
-      if (entry.isDirectory() || entry.isSymbolicLink()) {
-        dirs.push(entry.name);
-      } else {
-        files.push(entry.name);
-      }
-    }
+    await Promise.allSettled(
+      entries.map(async (entry) => {
+        if (entry.isSymbolicLink()) {
+          const path = join(dir, entry.name);
+          try {
+            const st = await stat(path);
+            if (st.isDirectory()) {
+              dirs.push(entry.name);
+            } else if (st.isFile()) {
+              files.push(entry.name);
+            }
+          } catch {
+            // ignore broken symlinks
+          }
+        } else if (entry.isDirectory() || entry.isSymbolicLink()) {
+          dirs.push(entry.name);
+        } else {
+          files.push(entry.name);
+        }
+      }),
+    );
     return { files, dirs };
   } catch (e) {
     return { files: [], dirs: [], error: JSON.stringify(e) };
