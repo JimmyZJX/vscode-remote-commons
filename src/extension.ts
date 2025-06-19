@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import EventEmitter, { once } from "events";
 import { mkdir, readdir, stat, writeFile } from "fs/promises";
 import fetch, { RequestInfo, RequestInit } from "node-fetch";
-import { platform } from "os";
+import { platform, tmpdir } from "os";
 import { dirname, join } from "path";
 import { text } from "stream/consumers";
 import { commands, ExtensionContext, extensions, Uri, window } from "vscode";
@@ -290,16 +290,22 @@ async function readDirFilesAndDirs(dir: string) {
   }
 }
 
-async function createFile(path: string) {
+async function createFile(path: string, contents: string | undefined) {
   await mkdir(dirname(path), { recursive: true });
   try {
     await stat(path);
     return;
   } catch (exn) {
     try {
-      await writeFile(path, "");
+      await writeFile(path, contents ?? "", "utf8");
     } catch {}
   }
+}
+
+async function createTempFile(path: string, contents: string | undefined) {
+  const file = join(tmpdir(), ".vscode-remote-commons", path);
+  await createFile(file, contents);
+  return file;
 }
 
 async function fileExists(path: string) {
@@ -325,14 +331,26 @@ export async function activate(context: ExtensionContext) {
       "remote-commons.fs.readDirFilesAndDirs",
       async (dir: string) => readDirFilesAndDirs(dir),
     ),
-    commands.registerCommand("remote-commons.fs.createFile", async (path: string) =>
-      createFile(path),
+    commands.registerCommand(
+      "remote-commons.fs.createFile",
+      async (path: string, contents?: string) => createFile(path, contents),
+    ),
+    commands.registerCommand(
+      "remote-commons.fs.createTempFile",
+      async (relPath: string, contents?: string) => createTempFile(relPath, contents),
     ),
     commands.registerCommand("remote-commons.fs.fileExists", async (path: string) =>
       fileExists(path),
     ),
     commands.registerCommand("remote-commons.openFile", async (file: string, options) => {
-      await window.showTextDocument(Uri.file(file), options);
+      let uri = Uri.file(file);
+      try {
+        const parsed = Uri.parse(file);
+        if (parsed.toString() === file) {
+          uri = parsed;
+        }
+      } catch {}
+      await window.showTextDocument(uri, options);
     }),
     commands.registerCommand("remote-commons.process.run", runProcess),
     commands.registerCommand(
