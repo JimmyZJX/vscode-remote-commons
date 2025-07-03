@@ -75,7 +75,10 @@ async function runProcess(
           options.shell = true;
         }
       }
-      const process = spawn(prog, args, {
+      if (options && options.env !== undefined) {
+        options.env = { ...process.env, ...options.env };
+      }
+      const proc = spawn(prog, args, {
         stdio: ["ignore", "pipe", "pipe"],
         ...(options || {}),
       });
@@ -105,18 +108,18 @@ async function runProcess(
             });
           }
         };
-        process.on("exit", onExit);
+        proc.on("exit", onExit);
       });
 
       let stdout: string | undefined,
         stderr: string | undefined,
         error: ExecException | null;
       const processErrorPromise = new Promise<Error>((resolve) => {
-        process.on("error", (err: Error) => resolve(err));
+        proc.on("error", (err: Error) => resolve(err));
       });
       [stdout, stderr, error] = await Promise.all([
-        process.stdout ? text(process.stdout) : undefined,
-        process.stderr ? text(process.stderr) : undefined,
+        proc.stdout ? text(proc.stdout) : undefined,
+        proc.stderr ? text(proc.stderr) : undefined,
         Promise.race([errorPromise, processErrorPromise]),
       ]);
 
