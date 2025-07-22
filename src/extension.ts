@@ -293,9 +293,9 @@ async function readDirFilesAndDirs(dir: string) {
   }
 }
 
-async function createFile(path: string, contents: string | undefined) {
+async function createFile(path: string, contents: string | undefined | null) {
   await mkdir(dirname(path), { recursive: true });
-  if (contents !== undefined) {
+  if (contents !== undefined && contents !== null) {
     // force overwrite contents
     try {
       await writeFile(path, contents, "utf8");
