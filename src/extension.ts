@@ -295,13 +295,20 @@ async function readDirFilesAndDirs(dir: string) {
 
 async function createFile(path: string, contents: string | undefined) {
   await mkdir(dirname(path), { recursive: true });
-  try {
-    await stat(path);
-    return;
-  } catch (exn) {
+  if (contents !== undefined) {
+    // force overwrite contents
     try {
-      await writeFile(path, contents ?? "", "utf8");
+      await writeFile(path, contents, "utf8");
     } catch {}
+  } else {
+    try {
+      await stat(path);
+      return;
+    } catch {
+      try {
+        await writeFile(path, "", "utf8");
+      } catch {}
+    }
   }
 }
 
